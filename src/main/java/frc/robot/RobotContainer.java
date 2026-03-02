@@ -10,12 +10,14 @@ import static edu.wpi.first.units.Units.*;
 import com.ctre.phoenix6.swerve.SwerveModule.DriveRequestType;
 import com.ctre.phoenix6.swerve.SwerveRequest;
 import com.pathplanner.lib.auto.AutoBuilder;
+import com.pathplanner.lib.auto.NamedCommands;
 
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
 
@@ -26,6 +28,8 @@ import frc.robot.Constants.DriveConstants;
 import frc.robot.Constants.VisionConstants;
 
 import frc.robot.commands.AlignWithAprilTagCommand;
+import frc.robot.commands.ShootCommand;
+import frc.robot.commands.SpinUpShooterCommand;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.IntakeSubsystem;
 import frc.robot.subsystems.ShooterSubsystem;
@@ -57,8 +61,12 @@ public class RobotContainer {
     public final TransportSubsystem transport = new TransportSubsystem();
 
     public RobotContainer() {
+        // Register named commands BEFORE building auto chooser
+        NamedCommands.registerCommand("spinUp", new SpinUpShooterCommand(shooter));
+        NamedCommands.registerCommand("shoot", new ShootCommand(shooter, transport));
+
         configureBindings();
-        
+
         // Build an auto chooser with all autos in the project
         autoChooser = AutoBuilder.buildAutoChooser();
         SmartDashboard.putData("Auto Chooser", autoChooser);
@@ -67,7 +75,7 @@ public class RobotContainer {
     private void configureBindings() {
         // Create the AprilTag alignment command
         AlignWithAprilTagCommand alignWithAprilTagCommand = 
-            new AlignWithAprilTagCommand(drivetrain, VisionConstants.kLimelightName, VisionConstants.kCloseEnoughDistanceMin, drive, joystick, MaxSpeed);
+            new AlignWithAprilTagCommand(drivetrain, VisionConstants.kLimelightName, VisionConstants.kCloseEnoughDistanceMin, drive, joystick, MaxSpeed, MaxAngularRate);
             
         // Add a description to the SmartDashboard
         SmartDashboard.putString("AprilTag/Info", "Press POV Up to align with AprilTag");
@@ -122,7 +130,7 @@ public class RobotContainer {
         drivetrain.registerTelemetry(logger::telemeterize);
         
         //Subsystem Buttons
-        joystick.x().whileTrue(intake.runEnd(intake::runForward, intake::stop)); //Intake Forward
+        joystick.x().toggleOnTrue(Commands.startEnd(intake::runForward, intake::stop, intake)); //Intake Toggle
         joystick.a().whileTrue(intake.runEnd(intake::runReverse, intake::stop)); //Intake Reverse
         joystick.y().whileTrue(shooter.runEnd(shooter::runForward, shooter::stop)); //Shooter Shoot
         joystick.rightBumper().whileTrue(transport.runEnd(transport::runForward, transport::stop)); //Transport Forward

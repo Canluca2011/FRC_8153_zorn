@@ -8,12 +8,14 @@ import java.util.function.Supplier;
 
 import com.ctre.phoenix6.swerve.SwerveRequest;
 import com.ctre.phoenix6.swerve.SwerveRequest.FieldCentric;
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import frc.robot.LimelightHelpers;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
+import frc.robot.Constants.DriveConstants;
 import frc.robot.Constants.VisionConstants;
 
 /**
@@ -29,6 +31,7 @@ public class AlignWithAprilTagCommand extends Command {
   private final FieldCentric m_drive; // Swerve request for field-centric control
   private final CommandXboxController m_joystick; // Controller for driver input
   private final double m_maxSpeed; // Maximum speed in meters per second
+  private final double m_maxAngularRate; // Maximum angular rate in radians per second
 
   
 
@@ -48,16 +51,18 @@ public class AlignWithAprilTagCommand extends Command {
    * @param drive The FieldCentric drive request to use
    * @param joystick The controller for driver input
    * @param maxSpeed The maximum speed in meters per second
+   * @param maxAngularRate The maximum angular rate in radians per second
    */
-  public AlignWithAprilTagCommand(CommandSwerveDrivetrain drivetrain, String limelightName, 
+  public AlignWithAprilTagCommand(CommandSwerveDrivetrain drivetrain, String limelightName,
                                  double closeEnoughDistance, FieldCentric drive,
-                                 CommandXboxController joystick, double maxSpeed) {
+                                 CommandXboxController joystick, double maxSpeed, double maxAngularRate) {
     m_drivetrain = drivetrain;
     m_limelightName = limelightName;
     m_closeEnoughDistance = closeEnoughDistance;
     m_drive = drive;
     m_joystick = joystick;
     m_maxSpeed = maxSpeed;
+    m_maxAngularRate = maxAngularRate;
     
     m_rotationPID = new PIDController(kP, kI, kD);
     m_rotationPID.setTolerance(TOLERANCE);
@@ -89,9 +94,9 @@ public class AlignWithAprilTagCommand extends Command {
      *      so it continues to align even while approaching the tag.
      */
 
-    // Get driver input for movement
-    double velocityX = -m_joystick.getLeftY() * m_maxSpeed;
-    double velocityY = m_joystick.getLeftX() * m_maxSpeed;
+    // Get driver input for movement (with deadband matching default command)
+    double velocityX = -MathUtil.applyDeadband(m_joystick.getLeftY(), DriveConstants.kDeadband) * m_maxSpeed;
+    double velocityY = -MathUtil.applyDeadband(m_joystick.getLeftX(), DriveConstants.kDeadband) * m_maxSpeed;
     
     // Check if we have a valid target
     boolean hasValidTarget = LimelightHelpers.getTV(m_limelightName);
@@ -100,7 +105,7 @@ public class AlignWithAprilTagCommand extends Command {
     
     if (!hasValidTarget) {
       // No valid target, allow manual rotation
-      double rotationalRate = -m_joystick.getRightX() * m_maxSpeed;
+      double rotationalRate = -MathUtil.applyDeadband(m_joystick.getRightX(), DriveConstants.kDeadband) * m_maxAngularRate;
       m_drivetrain.setControl(m_drive.withVelocityX(velocityX).withVelocityY(velocityY).withRotationalRate(rotationalRate));
       SmartDashboard.putBoolean("AprilTag/IsAligning", false);
       return;
@@ -111,7 +116,7 @@ public class AlignWithAprilTagCommand extends Command {
     
     if (targetPose.length < 6) {
       // Invalid pose data, allow manual rotation
-      double rotationalRate = -m_joystick.getRightX() * m_maxSpeed;
+      double rotationalRate = -MathUtil.applyDeadband(m_joystick.getRightX(), DriveConstants.kDeadband) * m_maxAngularRate;
       m_drivetrain.setControl(m_drive.withVelocityX(velocityX).withVelocityY(velocityY).withRotationalRate(rotationalRate));
       SmartDashboard.putBoolean("AprilTag/IsAligning", false);
       return;
@@ -127,7 +132,7 @@ public class AlignWithAprilTagCommand extends Command {
     
     if (isCloseEnough) {
       // Close enough, allow manual rotation
-      double rotationalRate = -m_joystick.getRightX() * m_maxSpeed;
+      double rotationalRate = -MathUtil.applyDeadband(m_joystick.getRightX(), DriveConstants.kDeadband) * m_maxAngularRate;
       m_drivetrain.setControl(m_drive.withVelocityX(velocityX).withVelocityY(velocityY).withRotationalRate(rotationalRate));
       SmartDashboard.putBoolean("AprilTag/IsAligning", false);
       return;
