@@ -30,7 +30,7 @@ public class AlignWithAprilTagCommand extends Command {
   // HARDCODED CONFIGURATION VARIABLES
   // ==========================================
   private final String m_limelightName = "limelight-emperor"; // Default limelight network table name
-  private final double m_closeEnoughDistance = 1.0; // Distance in meters to stop aligning
+  private final double m_closeEnoughDistance = 0.75; // Distance in meters to stop aligning
   private final double m_maxSpeed = 4.5; // Max translation speed (meters per second)
   private final double m_maxAngularRate = Math.PI; // Max rotation speed (radians per second)
   private static double distance = 0.0; // Distance to target (meters) - for debugging
@@ -106,7 +106,7 @@ public class AlignWithAprilTagCommand extends Command {
     if (isCloseEnough) {
       // Close enough, allow manual rotation
       double rotationalRate = -MathUtil.applyDeadband(m_joystick.getRightX(), DriveConstants.kDeadband) * m_maxAngularRate;
-      m_drivetrain.setControl(m_drive.withVelocityX(0.0).withVelocityY(0.0).withRotationalRate(0.0));
+      m_drivetrain.setControl(m_drive.withVelocityX(velocityX).withVelocityY(velocityY).withRotationalRate(-rotationalRate));
       SmartDashboard.putBoolean("AprilTag/IsAligning", false);
       return;
     }
@@ -121,7 +121,7 @@ public class AlignWithAprilTagCommand extends Command {
     SmartDashboard.putNumber("AprilTag/RotationRate", rotationRate);
     
     // Apply the rotation to the drivetrain while allowing driver control of translation
-    m_drivetrain.setControl(m_drive.withVelocityX(velocityX).withVelocityY(velocityY).withRotationalRate(rotationRate));
+    m_drivetrain.setControl(m_drive.withVelocityX(velocityX).withVelocityY(velocityY).withRotationalRate(-rotationRate));
     SmartDashboard.putBoolean("AprilTag/IsAligning", true);
   }
 
