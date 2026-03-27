@@ -4,9 +4,6 @@
 
 package frc.robot.commands;
 
-import java.util.function.Supplier;
-
-import com.ctre.phoenix6.swerve.SwerveRequest;
 import com.ctre.phoenix6.swerve.SwerveRequest.FieldCentric;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.PIDController;
@@ -19,54 +16,51 @@ import frc.robot.Constants.DriveConstants;
 import frc.robot.Constants.VisionConstants;
 
 /**
- * A command that aligns the robot's heading to be parallel with the plane of an AprilTag.
- * This makes the robot face directly towards the tag, which helps with alignment.
+ * A command that aligns the robot's heading to center an AprilTag using Limelight's tx.
+ * It uses trigonometry (ty) to calculate distance and stops aligning when close enough.
  * The driver can still control the robot's movement while the command handles the rotation.
  */
 public class AlignWithAprilTagCommand extends Command {
   private final CommandSwerveDrivetrain m_drivetrain;
-  private final String m_limelightName;
+  private final FieldCentric m_drive; 
+  private final CommandXboxController m_joystick; 
   private final PIDController m_rotationPID;
-  private final double m_closeEnoughDistance; // Distance in meters to consider "close enough" to the tag
-  private final FieldCentric m_drive; // Swerve request for field-centric control
-  private final CommandXboxController m_joystick; // Controller for driver input
-  private final double m_maxSpeed; // Maximum speed in meters per second
-  private final double m_maxAngularRate; // Maximum angular rate in radians per second
 
-  
+  // ==========================================
+  // HARDCODED CONFIGURATION VARIABLES
+  // ==========================================
+  private final String m_limelightName = "limelight-emperor"; // Default limelight network table name
+  private final double m_closeEnoughDistance = 1.0; // Distance in meters to stop aligning
+  private final double m_maxSpeed = 4.5; // Max translation speed (meters per second)
+  private final double m_maxAngularRate = Math.PI; // Max rotation speed (radians per second)
+  private static double distance = 0.0; // Distance to target (meters) - for debugging
 
-// ...existing code...
-  // PID constants for rotation control
+  // Trigonometry Constants for Distance Calculation
+  // NOTE: UPDATE THESE TO MATCH YOUR ACTUAL ROBOT MEASUREMENTS
+  private final double m_cameraHeightMeters = 0.47; // Height of the Limelight lens from the floor
+  private final double m_targetHeightMeters = 1.1; // Height of the AprilTag center from the floor
+  private final double m_cameraPitchDegrees = 30.0; // Mounting angle of the camera (up is positive)
+
+  // PID constants for rotation control (pulling from your Constants file)
   private static final double kP = VisionConstants.kAlignmentP;
   private static final double kI = VisionConstants.kAlignmentI;
   private static final double kD = VisionConstants.kAlignmentD;
   private static final double TOLERANCE = VisionConstants.kAlignmentTolerance; // degrees
 
   /**
-   * Creates a new AlignWithAprilTagCommand.
-   * 
-   * @param drivetrain The drivetrain subsystem to use
-   * @param limelightName The name of the Limelight camera
-   * @param closeEnoughDistance Distance in meters to consider "close enough" to the tag
+   * Creates a new AlignWithAprilTagCommand with hardcoded constraints.
+   * * @param drivetrain The drivetrain subsystem to use
    * @param drive The FieldCentric drive request to use
    * @param joystick The controller for driver input
-   * @param maxSpeed The maximum speed in meters per second
-   * @param maxAngularRate The maximum angular rate in radians per second
    */
-  public AlignWithAprilTagCommand(CommandSwerveDrivetrain drivetrain, String limelightName,
-                                 double closeEnoughDistance, FieldCentric drive,
-                                 CommandXboxController joystick, double maxSpeed, double maxAngularRate) {
+  public AlignWithAprilTagCommand(CommandSwerveDrivetrain drivetrain, FieldCentric drive, CommandXboxController joystick) {
     m_drivetrain = drivetrain;
-    m_limelightName = limelightName;
-    m_closeEnoughDistance = closeEnoughDistance;
     m_drive = drive;
     m_joystick = joystick;
-    m_maxSpeed = maxSpeed;
-    m_maxAngularRate = maxAngularRate;
     
     m_rotationPID = new PIDController(kP, kI, kD);
     m_rotationPID.setTolerance(TOLERANCE);
-    m_rotationPID.enableContinuousInput(-180, 180); // Treat angle wrapping properly
+    m_rotationPID.enableContinuousInput(-180, 180); 
     
     addRequirements(drivetrain);
   }
@@ -78,22 +72,6 @@ public class AlignWithAprilTagCommand extends Command {
 
   @Override
   public void execute() {
-    /* 
-     * RECOMMENDATIONS FOR TOURNAMENT PREP:
-     * 1. Coordinate System Verification:
-     *    - Test if pushing the joystick LEFT moves the robot LEFT. If it moves RIGHT, check velocityY.
-     *    - Test if pushing UP moves the robot FORWARD.
-     * 
-     * 2. PID Tuning:
-     *    - Current P=0.1 might be too soft. If the robot aligns too slowly, increase P (try 0.15 or 0.2).
-     *    - If the robot oscillates (wobbles left/right), increase D (try 0.02).
-     * 
-     * 3. "Close Enough" Behavior:
-     *    - Currently, if the robot gets within m_closeEnoughDistance, alignment STOPS.
-     *    - If you are missing shots because the robot stops aligning too early, consider removing the "isCloseEnough" check
-     *      so it continues to align even while approaching the tag.
-     */
-
     // Get driver input for movement (with deadband matching default command)
     double velocityX = -MathUtil.applyDeadband(m_joystick.getLeftY(), DriveConstants.kDeadband) * m_maxSpeed;
     double velocityY = -MathUtil.applyDeadband(m_joystick.getLeftX(), DriveConstants.kDeadband) * m_maxSpeed;
@@ -101,7 +79,6 @@ public class AlignWithAprilTagCommand extends Command {
     // Check if we have a valid target
     boolean hasValidTarget = LimelightHelpers.getTV(m_limelightName);
     SmartDashboard.putBoolean("AprilTag/HasTarget", hasValidTarget);
-    SmartDashboard.putString("AprilTag/LimelightName", m_limelightName);
     
     if (!hasValidTarget) {
       // No valid target, allow manual rotation
@@ -111,21 +88,17 @@ public class AlignWithAprilTagCommand extends Command {
       return;
     }
 
-    // Get the target's pose in robot space
-    double[] targetPose = LimelightHelpers.getTargetPose_RobotSpace(m_limelightName);
-    
-    if (targetPose.length < 6) {
-      // Invalid pose data, allow manual rotation
-      double rotationalRate = -MathUtil.applyDeadband(m_joystick.getRightX(), DriveConstants.kDeadband) * m_maxAngularRate;
-      m_drivetrain.setControl(m_drive.withVelocityX(velocityX).withVelocityY(velocityY).withRotationalRate(rotationalRate));
-      SmartDashboard.putBoolean("AprilTag/IsAligning", false);
-      return;
-    }
+    // Get the horizontal (tx) and vertical (ty) offsets from the Limelight
+    double tx = LimelightHelpers.getTX(m_limelightName);
+    double ty = LimelightHelpers.getTY(m_limelightName);
 
-    // Calculate distance to target (using x and y components)
-    double distance = Math.sqrt(targetPose[0] * targetPose[0] + targetPose[1] * targetPose[1]);
-    SmartDashboard.putNumber("AprilTag/Distance", distance);
+    // Calculate distance to target using trigonometry
+    double angleToGoalRadians = Math.toRadians(m_cameraPitchDegrees + ty);
+    double distance = (m_targetHeightMeters - m_cameraHeightMeters) / Math.tan(angleToGoalRadians);
     
+    SmartDashboard.putNumber("AprilTag/Distance", distance);
+    AlignWithAprilTagCommand.distance = distance;
+
     // If we're close enough to the tag, we can stop aligning
     boolean isCloseEnough = distance < m_closeEnoughDistance;
     SmartDashboard.putBoolean("AprilTag/IsCloseEnough", isCloseEnough);
@@ -133,39 +106,32 @@ public class AlignWithAprilTagCommand extends Command {
     if (isCloseEnough) {
       // Close enough, allow manual rotation
       double rotationalRate = -MathUtil.applyDeadband(m_joystick.getRightX(), DriveConstants.kDeadband) * m_maxAngularRate;
-      m_drivetrain.setControl(m_drive.withVelocityX(velocityX).withVelocityY(velocityY).withRotationalRate(rotationalRate));
+      m_drivetrain.setControl(m_drive.withVelocityX(0.0).withVelocityY(0.0).withRotationalRate(0.0));
       SmartDashboard.putBoolean("AprilTag/IsAligning", false);
       return;
     }
 
-    // Extract the yaw component from the target pose
-    // The yaw represents the rotation around the Z axis
-    double targetYaw = targetPose[5]; // In degrees
+    // Use PID to calculate the rotational rate. We want to bring tx to 0.
+    double rotationRate = m_rotationPID.calculate(tx, 0);
     
-    // Calculate the heading error
-    // We want to align with the tag, so our desired heading is 0 degrees relative to the tag
-    // The error is the negative of the target's yaw in robot space
-    double headingError = -targetYaw;
-    SmartDashboard.putNumber("AprilTag/HeadingError", headingError);
-    
-    // Use PID to calculate the rotational rate
-    double rotationRate = m_rotationPID.calculate(headingError, 0);
+    // Clamp the rotation rate so the robot doesn't spin too violently
+    rotationRate = MathUtil.clamp(rotationRate, -m_maxAngularRate, m_maxAngularRate);
+
+    SmartDashboard.putNumber("AprilTag/TX", tx);
     SmartDashboard.putNumber("AprilTag/RotationRate", rotationRate);
     
-    // Apply the rotation to the drivetrain while allowing driver control of movement
+    // Apply the rotation to the drivetrain while allowing driver control of translation
     m_drivetrain.setControl(m_drive.withVelocityX(velocityX).withVelocityY(velocityY).withRotationalRate(rotationRate));
     SmartDashboard.putBoolean("AprilTag/IsAligning", true);
   }
 
   @Override
   public void end(boolean interrupted) {
-    // Let the default command take over when this command ends
     SmartDashboard.putBoolean("AprilTag/IsAligning", false);
   }
 
   @Override
   public boolean isFinished() {
-    // This command runs until interrupted
     return false;
   }
 }

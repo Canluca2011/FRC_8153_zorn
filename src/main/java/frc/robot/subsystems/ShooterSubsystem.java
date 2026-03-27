@@ -29,14 +29,14 @@ public class ShooterSubsystem extends SubsystemBase {
 
 
     public void runForward() {
-        shooterMotorLeft.set(ShooterConstants.kShootSpeed);
-        shooterMotorRight.set(-ShooterConstants.kShootSpeed); // Inverted relative to left
+        shooterMotorLeft.setVoltage(ShooterConstants.kShootSpeed);
+        shooterMotorRight.setVoltage(-ShooterConstants.kShootSpeed); // Inverted relative to left
     }
 
 
     public void stop() {
-        shooterMotorLeft.set(0.0);
-        shooterMotorRight.set(0.0);
+        shooterMotorLeft.setVoltage(0.0);
+        shooterMotorRight.setVoltage(0.0);
     }
 
 }

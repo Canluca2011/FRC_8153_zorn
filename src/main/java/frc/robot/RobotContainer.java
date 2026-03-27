@@ -13,7 +13,6 @@ import com.pathplanner.lib.auto.AutoBuilder;
 import com.pathplanner.lib.auto.NamedCommands;
 
 import edu.wpi.first.math.MathUtil;
-import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
@@ -47,8 +46,6 @@ public class RobotContainer {
             .withDeadband(MaxSpeed * DriveConstants.kDeadband)
             .withRotationalDeadband(MaxAngularRate * DriveConstants.kDeadband) //10% deadband
             .withDriveRequestType(DriveRequestType.OpenLoopVoltage);
-    private final SwerveRequest.SwerveDriveBrake brake = new SwerveRequest.SwerveDriveBrake();
-    private final SwerveRequest.PointWheelsAt point = new SwerveRequest.PointWheelsAt();
 
     private final Telemetry logger = new Telemetry(MaxSpeed);
 
@@ -75,7 +72,7 @@ public class RobotContainer {
     private void configureBindings() {
         // Create the AprilTag alignment command
         AlignWithAprilTagCommand alignWithAprilTagCommand = 
-            new AlignWithAprilTagCommand(drivetrain, VisionConstants.kLimelightName, VisionConstants.kCloseEnoughDistanceMin, drive, joystick, MaxSpeed, MaxAngularRate);
+            new AlignWithAprilTagCommand(drivetrain, drive, joystick);
             
         // Add a description to the SmartDashboard
         SmartDashboard.putString("AprilTag/Info", "Press POV Up to align with AprilTag");
@@ -86,40 +83,12 @@ public class RobotContainer {
                 double velocityY = -MathUtil.applyDeadband(joystick.getLeftX(), DriveConstants.kDeadband) * MaxSpeed;
                 
                 double rotationalRate = -MathUtil.applyDeadband(joystick.getRightX(), DriveConstants.kDeadband) * MaxAngularRate;
-                
-                // The AprilTag alignment is now handled by the AlignWithAprilTagCommand
-                // when button 3 is pressed, so we don't need to check for it here
-                
-                if(joystick.button(8).getAsBoolean()){
-                }
-                else if(joystick.button(9).getAsBoolean()){
-
-                }
-                else{
-
-                }
             
                 return drive.withVelocityX(velocityX)
                             .withVelocityY(velocityY)
                             .withRotationalRate(rotationalRate);
             })
         );
-        
-        // Bind the AprilTag alignment command to button 3
-        // DISABLED - AprilTag alignment temporarily deactivated
-        // joystick.button(3).whileTrue(alignWithAprilTagCommand);
-        
-        /* 
-        joystick.a().whileTrue(drivetrain.applyRequest(() -> brake));
-        joystick.b().whileTrue(drivetrain.applyRequest(() ->
-            point.withModuleDirection(new Rotation2d(-joystick.getLeftY(), -joystick.getLeftX()))
-        ));
-        */
-
-        joystick.back().and(joystick.y()).whileTrue(drivetrain.sysIdDynamic(Direction.kForward));
-        joystick.back().and(joystick.x()).whileTrue(drivetrain.sysIdDynamic(Direction.kReverse));
-        joystick.start().and(joystick.y()).whileTrue(drivetrain.sysIdQuasistatic(Direction.kForward));
-        joystick.start().and(joystick.x()).whileTrue(drivetrain.sysIdQuasistatic(Direction.kReverse));
         
         joystick.povDown().onTrue(drivetrain.runOnce(() -> drivetrain.seedFieldCentric())); // Reset Field-Centric Reference
         
@@ -138,10 +107,6 @@ public class RobotContainer {
     }
 
     public Command getAutonomousCommand() {
-        // Return the selected auto from the chooser
         return autoChooser.getSelected();
-        
-        // Alternatively, you can return a specific auto:
-        // return new PathPlannerAuto("Example Auto");
     }
 }

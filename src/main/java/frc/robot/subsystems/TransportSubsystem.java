@@ -13,12 +13,14 @@ public class TransportSubsystem extends SubsystemBase {
 
     private final SparkMax transportMotorLeft;
     private final SparkMax transportMotorRight;
+    private final SparkMax transportMotorNew;
 
     private final SparkMaxConfig transportConfig;
 
     public TransportSubsystem() {
         transportMotorLeft = new SparkMax(TransportConstants.kLeftMotorId, MotorType.kBrushless);
         transportMotorRight = new SparkMax(TransportConstants.kRightMotorId, MotorType.kBrushless);
+        transportMotorNew = new SparkMax(3, MotorType.kBrushless);
 
         transportConfig = new SparkMaxConfig();
         transportConfig.smartCurrentLimit(TransportConstants.kCurrentLimit); 
@@ -29,17 +31,20 @@ public class TransportSubsystem extends SubsystemBase {
 
 
     public void runForward() {
-        transportMotorLeft.set(-TransportConstants.kTransportSpeed);
-        transportMotorRight.set(TransportConstants.kTransportSpeed);
+        transportMotorLeft.setVoltage(-TransportConstants.kTransportSpeed);
+        transportMotorRight.setVoltage(TransportConstants.kTransportSpeed);
+        transportMotorNew.setVoltage(TransportConstants.kTransportSpeed);
     }  
 
     public void runReverse() {
-        transportMotorLeft.set(TransportConstants.kTransportSpeed);
-        transportMotorRight.set(-TransportConstants.kTransportSpeed);
+        transportMotorLeft.setVoltage(TransportConstants.kTransportSpeed);
+        transportMotorRight.setVoltage(-TransportConstants.kTransportSpeed);
+        transportMotorNew.setVoltage(-TransportConstants.kTransportSpeed);
     }
 
     public void stop() {
-        transportMotorLeft.set(0.0); 
-        transportMotorRight.set(0.0);
+        transportMotorLeft.setVoltage(0.0); 
+        transportMotorRight.setVoltage(0.0);
+        transportMotorNew.setVoltage(0.0);
     }
 }
